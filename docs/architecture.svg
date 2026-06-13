@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17132d"/>
+      <stop offset="1" stop-color="#080812"/>
+    </linearGradient>
+    <style>
+      .box{fill:#121126;stroke:#786cff;stroke-width:2;rx:16}
+      .title{fill:#fff;font:700 24px Arial}
+      .text{fill:#c9c4dc;font:16px Arial}
+      .small{fill:#aaa2c6;font:14px Arial}
+      .arrow{stroke:#ff7094;stroke-width:4;fill:none;marker-end:url(#head)}
+    </style>
+    <marker id="head" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#ff7094"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="620" rx="28" fill="url(#bg)"/>
+  <text x="60" y="62" class="title">LifeChoice Simulator: bounded agentic simulation</text>
+  <rect x="60" y="110" width="250" height="130" class="box"/>
+  <text x="85" y="150" class="title">Gradio UI</text>
+  <text x="85" y="182" class="text">Dilemma + one calibration</text>
+  <text x="85" y="210" class="small">Immediate opening scene</text>
+  <rect x="470" y="90" width="300" height="170" class="box"/>
+  <text x="495" y="132" class="title">State Engine</text>
+  <text x="495" y="165" class="text">5 clamped metrics</text>
+  <text x="495" y="193" class="text">Facts + obligations</text>
+  <text x="495" y="221" class="text">Closed options + history</text>
+  <rect x="900" y="110" width="240" height="130" class="box"/>
+  <text x="925" y="150" class="title">7B Model</text>
+  <text x="925" y="182" class="text">Optional node enrichment</text>
+  <text x="925" y="210" class="small">Strict JSON + timeout</text>
+  <rect x="160" y="390" width="270" height="140" class="box"/>
+  <text x="185" y="430" class="title">Narrative Guard</text>
+  <text x="185" y="463" class="text">Threshold consistency</text>
+  <text x="185" y="491" class="text">Deterministic fallback</text>
+  <rect x="500" y="390" width="270" height="140" class="box"/>
+  <text x="525" y="430" class="title">Cascades</text>
+  <text x="525" y="463" class="text">Node 2: echo</text>
+  <text x="525" y="491" class="text">Nodes 5 + 7: payoff</text>
+  <rect x="840" y="390" width="270" height="140" class="box"/>
+  <text x="865" y="430" class="title">Reactive World</text>
+  <text x="865" y="463" class="text">Thriving / stable</text>
+  <text x="865" y="491" class="text">Struggling + report</text>
+  <path d="M310 175H465" class="arrow"/>
+  <path d="M770 175H895" class="arrow"/>
+  <path d="M1015 245C1015 330 765 315 700 385" class="arrow"/>
+  <path d="M580 265C510 325 360 315 300 385" class="arrow"/>
+  <path d="M620 265V385" class="arrow"/>
+  <path d="M690 265C760 325 900 315 955 385" class="arrow"/>
+  <path d="M430 460H495" class="arrow"/>
+  <path d="M770 460H835" class="arrow"/>
+</svg>
+

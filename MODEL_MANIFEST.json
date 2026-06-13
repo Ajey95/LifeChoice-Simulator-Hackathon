@@ -1,0 +1,12 @@
+{
+  "models": [
+    {
+      "id": "Qwen/Qwen2.5-7B-Instruct",
+      "parameters_billions": 7.616,
+      "purpose": "Optional bounded decision-node enrichment",
+      "required": false
+    }
+  ],
+  "maximum_allowed_parameters_billions": 31.999,
+  "fallback": "Deterministic Python simulation content; no fallback model"
+}

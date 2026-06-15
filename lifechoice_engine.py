@@ -67,6 +67,7 @@ def start_session(
     chosen_key: str,
     calibration: str,
     persona: str,
+    prefetch: bool = True,
 ) -> SimulationSession:
     path_a, path_b = split_dilemma(dilemma)
     chosen, unchosen = (path_b, path_a) if chosen_key == "B" else (path_a, path_b)
@@ -81,7 +82,8 @@ def start_session(
         characters=_characters(chosen, unchosen),
     )
     session.generated_nodes[0] = build_node(session, 0, use_llm=False)
-    prefetch_node(session, 1)
+    if prefetch:
+        prefetch_node(session, 1)
     return session
 
 
@@ -176,22 +178,23 @@ def deterministic_node(context: dict[str, Any], index: int) -> dict[str, Any]:
     unchosen = context["unchosen_path"]
     state = context["world_state"]
     pressure = state_facts(state)
+    profile = personalization_profile(context)
     prior = context.get("recent_choices", [])
     prior_text = prior[-1]["choice"] if prior else f"step into {chosen}"
     facts = context.get("facts") or ["your first commitment"]
     fact = facts[-1]
 
     scenarios = (
-        f"A real opening appears on the {chosen} path. Taking it makes your decision visible to people who still expect {unchosen}. {pressure[0]}",
-        f"The first bill and deadline arrive together. Your choice to {prior_text.lower()} now has a practical cost. {pressure[0]}",
-        f"A peer posts a polished update from {unchosen} while your progress stays private. {pressure[1]}",
-        f"An easier offer would protect your routine but blur the identity you wanted from {chosen}. {pressure[0]}",
-        f"Your family asks for proof that {chosen} can become sustainable. The conversation is shaped by {fact}. {pressure[1]}",
-        f"An earlier commitment returns as an opportunity with conditions attached. You cannot accept it without paying a cost created months ago. {pressure[0]}",
-        f"You are no longer choosing only between paths. You are choosing what structure makes {chosen} survivable. {pressure[1]}",
-        f"Ten months in, the outside decision is clearer. The final choice is whether your version of {chosen} can carry both meaning and responsibility. {pressure[0]}",
+        f"{profile['opening']} You said this is real because {_lower_first(context['calibration'].rstrip('.'))}. Choosing it makes {profile['proof']} visible, while {unchosen} still offers {profile['alternative_pull']}.",
+        f"{profile['money_event']} Your earlier decision to {prior_text.lower()} now affects both your calendar and your bank balance. {pressure[0]}",
+        f"{profile['comparison_event']} Your progress on {chosen} is real but less visible. {pressure[1]}",
+        f"{profile['identity_event']} The offer protects one part of your life while weakening the reason you chose {chosen}. {pressure[0]}",
+        f"{profile['family_event']} They want evidence such as {profile['milestone']}, not another promise. The conversation is also shaped by {fact}.",
+        f"{profile['return_event']} Accepting it now means honoring obligations created by your earlier choices. {pressure[0]}",
+        f"The question is no longer simply {chosen} versus {unchosen}. You need a structure built around {profile['safety_floor']} that keeps the chosen path livable. {pressure[1]}",
+        f"Ten months in, you have evidence from {profile['milestone']} and the costs recorded in your choices. Decide whether {chosen} can carry meaning, money, health, and relationships together.",
     )
-    choices = _choice_templates(chosen, unchosen, index)
+    choices = _choice_templates(chosen, unchosen, index, profile)
     return {
         "month_label": MONTHS[index],
         "node_theme": THEMES[index],
@@ -201,22 +204,27 @@ def deterministic_node(context: dict[str, Any], index: int) -> dict[str, Any]:
     }
 
 
-def _choice_templates(chosen: str, unchosen: str, index: int) -> list[dict[str, Any]]:
+def _choice_templates(
+    chosen: str,
+    unchosen: str,
+    index: int,
+    profile: dict[str, str],
+) -> list[dict[str, Any]]:
     templates = (
         (
-            (f"Accept the first concrete {chosen} opportunity and tell people you are committed", _delta(-7, 12, 5, 9, -3), ["publicly_committed"], ["prove_progress"], []),
-            (f"Negotiate a smaller {chosen} commitment while keeping income or study stability", _delta(5, 5, 1, 2, 3), ["built_a_safety_floor"], ["maintain_two_tracks"], []),
-            (f"Delay the move and keep {unchosen} fully available for another month", _delta(6, -7, -3, 7, 4), ["delayed_commitment"], ["make_a_deadline"], []),
+            (profile["opening_bold"], _delta(-7, 12, 5, 9, -3), ["publicly_committed"], ["prove_progress"], []),
+            (profile["opening_balanced"], _delta(5, 5, 1, 2, 3), ["built_a_safety_floor"], ["maintain_two_tracks"], []),
+            (profile["opening_safe"], _delta(6, -7, -3, 7, 4), ["delayed_commitment"], ["make_a_deadline"], []),
         ),
         (
-            ("Cut optional spending and protect time for the path you chose", _delta(-4, 8, -2, 7, -4), ["protected_the_bold_path"], ["tight_budget"], []),
-            ("Take paid side work and reduce the pace of the main path", _delta(10, -3, 3, 5, 4), ["added_paid_work"], ["less_time_for_core_path"], []),
-            (f"Pause {chosen} until savings recover, even if momentum disappears", _delta(12, -11, 4, -5, 7), ["paused_for_money"], [], ["current_momentum"]),
+            (f"Cut optional spending for three months and protect weekly time for {profile['milestone']}", _delta(-4, 8, -2, 7, -4), ["protected_the_bold_path"], ["tight_budget"], []),
+            (f"Use {profile['income_floor']} to support yourself, but reduce the pace of {chosen}", _delta(10, -3, 3, 5, 4), ["added_paid_work"], ["less_time_for_core_path"], []),
+            (f"Pause {chosen} until you have {profile['safety_floor']}, even if {profile['proof']} loses momentum", _delta(12, -11, 4, -5, 7), ["paused_for_money"], [], ["current_momentum"]),
         ),
         (
-            ("Share unfinished work publicly and accept comparison as part of growth", _delta(-1, 6, 11, 8, -1), ["became_visible"], ["respond_to_feedback"], []),
-            ("Ignore the comparison and protect a private building phase", _delta(1, 8, -5, 2, 0), ["chose_private_progress"], [], []),
-            (f"Ask someone on {unchosen} for an honest comparison of both paths", _delta(3, 1, 5, 4, 3), ["sought_cross_path_advice"], ["face_comparison"], []),
+            (f"Share an unfinished {profile['work_sample']} and ask for feedback instead of hiding behind comparison", _delta(-1, 6, 11, 8, -1), ["became_visible"], ["respond_to_feedback"], []),
+            (f"Keep the {profile['work_sample']} private until it reaches the milestone you defined", _delta(1, 8, -5, 2, 0), ["chose_private_progress"], [], []),
+            (f"Ask someone already on {unchosen} to compare daily work, money, and growth honestly", _delta(3, 1, 5, 4, 3), ["sought_cross_path_advice"], ["face_comparison"], []),
         ),
         (
             ("Reject the easier offer because it changes what the work means to you", _delta(-10, 13, -2, 8, -3), ["protected_identity"], ["replace_lost_income"], ["easy_offer"]),
@@ -256,6 +264,90 @@ def _choice_templates(chosen: str, unchosen: str, index: int) -> list[dict[str, 
             }
         )
     return result
+
+
+def personalization_profile(context: dict[str, Any]) -> dict[str, str]:
+    chosen = context["chosen_path"]
+    unchosen = context["unchosen_path"]
+    calibration = " ".join(str(context.get("calibration", "")).split())
+    text = f"{chosen} {unchosen} {calibration}".lower()
+
+    if any(word in text for word in ("mtech", "masters", "research", "professor", "phd")):
+        professor = "the professor who showed interest" if "professor" in text else "a potential research mentor"
+        return {
+            "opening": f"{professor.capitalize()} asks whether you can commit to a defined project this semester.",
+            "proof": "a research direction and mentor support",
+            "alternative_pull": "an immediate salary and a clearer timeline",
+            "money_event": "Fees, living costs, and the delay before a dependable stipend become concrete.",
+            "comparison_event": f"A college peer shares a joining date and salary update from {unchosen}.",
+            "identity_event": "A placement opportunity arrives just as the research begins to feel like your own work.",
+            "family_event": "Your family asks how long they must wait before this path contributes income.",
+            "return_event": f"The professor offers a larger role, but it overlaps with interviews and income plans for {unchosen}.",
+            "milestone": "a funded project, publication milestone, or credible placement outcome",
+            "safety_floor": "a fees-and-living-cost plan with a firm review date",
+            "income_floor": "paid tutoring, assistantship work, or a limited freelance commitment",
+            "work_sample": "research proposal or early project result",
+            "opening_bold": "Accept the research project, but ask for scope, stipend timing, and a three-month milestone",
+            "opening_balanced": f"Commit to a smaller research milestone while continuing selected {unchosen} interviews",
+            "opening_safe": f"Take the {unchosen} route now and ask the professor to keep a limited research role open",
+        }
+
+    if any(word in text for word in ("artist", "design", "music", "writer", "creative", "film")):
+        return {
+            "opening": "A real client or showcase opportunity asks for a committed delivery date.",
+            "proof": "your portfolio and response from real people",
+            "alternative_pull": "a predictable salary and daily structure",
+            "money_event": "Rent, software costs, and an uneven client pipeline arrive in the same month.",
+            "comparison_event": f"A friend on {unchosen} posts a promotion while your strongest work is unfinished.",
+            "identity_event": "A commercial brief pays well but pushes your work away from the style you wanted to build.",
+            "family_event": "Your family asks whether the next client and payment are actually confirmed.",
+            "return_event": "A previous client returns with a larger project, a short deadline, and restrictive terms.",
+            "milestone": "three paying clients or a portfolio that consistently creates leads",
+            "safety_floor": "six months of runway and a monthly client target",
+            "income_floor": "a retainer client or part-time design contract",
+            "work_sample": "portfolio piece",
+            "opening_bold": "Accept the project, quote a real price, and publish the finished work as portfolio proof",
+            "opening_balanced": "Negotiate a smaller paid scope while keeping a limited stable-work schedule",
+            "opening_safe": f"Prioritize {unchosen} and reserve fixed weekly hours for one serious portfolio project",
+        }
+
+    if any(word in text for word in ("startup", "founder", "business", "revenue", "users")):
+        return {
+            "opening": "A potential customer asks for a feature and a delivery date before agreeing to pay.",
+            "proof": "customer use and repeatable revenue",
+            "alternative_pull": "salary, benefits, and predictable hours",
+            "money_event": "Runway shortens while customer requests expand beyond the original product.",
+            "comparison_event": f"A peer accepts a strong {unchosen} offer while your traction remains uneven.",
+            "identity_event": "An investor-friendly pivot could improve growth but weakens the problem you wanted to solve.",
+            "family_event": "Your family asks how much runway remains and what result would make you stop.",
+            "return_event": "An early customer returns with revenue, but demands priority and custom work.",
+            "milestone": "repeat customers and a monthly revenue target",
+            "safety_floor": "a runway threshold and a written stop-or-pivot date",
+            "income_floor": "consulting work capped at two days per week",
+            "work_sample": "customer pilot",
+            "opening_bold": "Commit to the pilot and define payment, scope, and a four-week success metric",
+            "opening_balanced": "Run the pilot while preserving two days of paid consulting each week",
+            "opening_safe": f"Take {unchosen} and test the product with customers on a fixed evening schedule",
+        }
+
+    concrete = calibration.rstrip(".") or f"you have a real reason to consider {chosen}"
+    return {
+        "opening": f"A concrete opportunity forces the decision forward: {concrete}.",
+        "proof": f"whether {chosen} works under your real constraint",
+        "alternative_pull": f"the protections you associate with {unchosen}",
+        "money_event": "The first deadline and financial consequence arrive together.",
+        "comparison_event": f"Someone close to you shows visible progress on {unchosen}.",
+        "identity_event": f"An easier option appears, but it changes what {chosen} would mean in daily life.",
+        "family_event": f"People affected by the decision ask for a concrete plan for {chosen}.",
+        "return_event": "The first opportunity returns with better upside and stricter conditions.",
+        "milestone": "a measurable result with a deadline",
+        "safety_floor": "a money, time, and health boundary",
+        "income_floor": "limited paid work",
+        "work_sample": "work-in-progress result",
+        "opening_bold": f"Accept the first {chosen} opportunity and define a measurable result before committing further",
+        "opening_balanced": f"Test {chosen} for three months while preserving a specific fallback on {unchosen}",
+        "opening_safe": f"Choose {unchosen} now and keep one bounded experiment on {chosen}",
+    }
 
 
 def validate_node(data: Any, fallback: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -395,6 +487,14 @@ def environment_state(state: dict[str, int]) -> str:
     return "stable"
 
 
+def character_expression(state: dict[str, int]) -> str:
+    if state["stress"] > 70:
+        return "stressed"
+    if state["creative_fulfillment"] > 70 and state["stress"] < 40:
+        return "confident"
+    return "neutral"
+
+
 def infer_environment(path: str) -> str:
     text = path.lower()
     mapping = (
@@ -450,6 +550,8 @@ def _consume_or_build(session: SimulationSession, index: int) -> dict[str, Any]:
 
 def _generate_node_with_hf(context: dict[str, Any], index: int) -> Any:
     token = os.getenv("HF_TOKEN")
+    if not token:
+        return None
     try:
         from huggingface_hub import InferenceClient
 
@@ -460,6 +562,11 @@ def _generate_node_with_hf(context: dict[str, Any], index: int) -> Any:
                 "Exactly three materially different choices.",
                 "Each choice must create a fact and use all five integer delta keys from -15 to 15.",
                 "Respect metric constraints and causal facts. Never contradict closed options.",
+                "Write in second person and keep the scenario under 320 characters.",
+                "Mention at least one concrete detail from calibration, current state, or recent history.",
+                "Choices must be specific actions with a concrete object, person, amount, deadline, or milestone.",
+                "Every choice must expose a real tradeoff with the unchosen path; no generic advice.",
+                "Ground relevant career dilemmas in realistic Indian student or young-professional details.",
                 "No advice, diagnosis, certainty, or prediction.",
             ],
             "month": MONTHS[index],
@@ -553,6 +660,10 @@ def _slug(value: str) -> str:
 def _label(value: str) -> str:
     cleaned = re.sub(r"^(?:i am |i'm |should i |choose |between )", "", value.strip(), flags=re.IGNORECASE)
     return " ".join(word if word.isupper() else word.capitalize() for word in cleaned.strip(" ?.,").split())
+
+
+def _lower_first(value: str) -> str:
+    return value[:1].lower() + value[1:] if value else value
 
 
 def _clamp(value: int) -> int:

@@ -1,6 +1,8 @@
 from lifechoice_engine import (
     MODEL_PARAMETERS_B,
+    _generate_node_with_hf,
     cascade_for,
+    character_expression,
     choose,
     compact_context,
     current_node,
@@ -21,6 +23,11 @@ def make_session():
 
 def test_model_is_small():
     assert MODEL_PARAMETERS_B < 32
+
+
+def test_missing_hf_token_skips_network_inference(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    assert _generate_node_with_hf({}, 0) is None
 
 
 def test_context_is_bounded():
@@ -74,6 +81,22 @@ def test_environment_responds_to_metrics():
     assert environment_state(crisis) == "struggling"
 
 
+def test_character_expression_is_independent_from_environment_label():
+    stable = dict(financial_security=58, creative_fulfillment=68, social_validation=50, stress=48, family_satisfaction=39)
+    assert environment_state(stable) == "stable"
+    assert character_expression(stable) == "neutral"
+    assert character_expression({**stable, "stress": 74}) == "stressed"
+    assert character_expression({**stable, "creative_fulfillment": 80, "stress": 30}) == "confident"
+
+
+def test_opening_scene_uses_calibration_details():
+    session = make_session()
+    node = current_node(session)
+    combined = f"{node['scenario']} {' '.join(choice['text'] for choice in node['choices'])}".lower()
+    assert "client" in combined
+    assert "rent" in combined or "income" in combined
+
+
 def test_three_cascade_moments():
     session = make_session()
     cascades = []
@@ -91,4 +114,3 @@ def test_opening_scene_is_immediate_and_deterministic():
     node = current_node(session)
     assert node["generation_source"] == "deterministic"
     assert len(node["choices"]) == 3
-

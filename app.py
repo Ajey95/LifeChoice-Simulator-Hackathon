@@ -16,8 +16,10 @@ from lifechoice_engine import (
     SimulationSession,
     choose,
     current_node,
+    character_expression,
     environment_image,
     environment_state,
+    prefetch_node,
     split_dilemma,
     start_session,
 )
@@ -280,6 +282,29 @@ footer { display: none !important; }
   transform: translate(-50%, -50%);
   z-index: 4;
 }
+.loading-stage {
+  align-items: center;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(92,225,230,.10), transparent 30%),
+    linear-gradient(145deg, #11182a, #070a12);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+  min-height: 530px;
+  text-align: center;
+}
+.loading-orbit {
+  animation: orbit 1.05s linear infinite;
+  border: 3px solid rgba(255,255,255,.11);
+  border-radius: 50%;
+  border-top-color: var(--gold);
+  height: 52px;
+  width: 52px;
+}
+.loading-stage h2 { color: #fff !important; font: 1.7rem "Arial Black", Impact, sans-serif; margin: 0; text-transform: uppercase; }
+.loading-stage p { color: var(--muted) !important; margin: 0; max-width: 460px; }
+.loading-steps { color: var(--cyan); font: 700 .67rem ui-monospace, monospace; letter-spacing: .09em; text-transform: uppercase; }
 .cascade-banner b { display: block; font: 900 .7rem ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
 .cascade-banner span { font-size: .76rem; }
 .report-card {
@@ -336,6 +361,7 @@ footer { display: none !important; }
 }
 #reset-button:hover { border-color: rgba(255,200,87,.45) !important; color: var(--gold) !important; }
 @keyframes slide-in { from { opacity: 0; transform: translate(-50%, -42%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes orbit { to { transform: rotate(360deg); } }
 @media (max-width: 760px) {
   .gradio-container { padding: 12px !important; }
   .app-header { align-items: flex-start; flex-direction: column; }
@@ -373,9 +399,20 @@ def begin(dilemma: str, chosen_key: str, calibration: str, persona: str):
         raise gr.Error("Enter a real dilemma first.")
     if not calibration.strip():
         raise gr.Error("Add one concrete pressure, constraint, or proof point.")
-    session = start_session(dilemma, chosen_key or "A", calibration, persona)
+    yield (
+        None,
+        loading_html(dilemma, calibration),
+        gr.Radio(choices=[], value=None),
+        "",
+        gr.Group(visible=False),
+        gr.Column(visible=False),
+        gr.Group(visible=False),
+        gr.Group(visible=True),
+        gr.Button(interactive=False, value="Building your world..."),
+    )
+    session = start_session(dilemma, chosen_key or "A", calibration, persona, prefetch=False)
     node = current_node(session)
-    return (
+    yield (
         session,
         game_html(session, node),
         gr.Radio(choices=_choice_options(node), value=None, label="Choose your move"),
@@ -383,8 +420,10 @@ def begin(dilemma: str, chosen_key: str, calibration: str, persona: str):
         gr.Group(visible=False),
         gr.Column(visible=True),
         gr.Group(visible=False),
-        gr.Button(interactive=True),
+        gr.Group(visible=True),
+        gr.Button(interactive=True, value="Commit choice"),
     )
+    prefetch_node(session, 1)
 
 
 def make_choice(session: SimulationSession, choice_value: str | None, custom_choice: str):
@@ -437,8 +476,23 @@ def reset():
         gr.Group(visible=False),
         gr.Column(visible=False),
         gr.Group(visible=True),
+        gr.Group(visible=False),
         gr.Button(interactive=True),
     )
+
+
+def loading_html(dilemma: str, calibration: str) -> str:
+    path_a, path_b = split_dilemma(dilemma)
+    detail = " ".join(calibration.split())[:150]
+    return f"""
+    <div class="game-frame loading-stage">
+      <div class="loading-orbit"></div>
+      <div class="eyebrow">Building a personalized causal world</div>
+      <h2>{html.escape(path_a)} / {html.escape(path_b)}</h2>
+      <p>Connecting your real constraint to the opening scene: {html.escape(detail)}</p>
+      <div class="loading-steps">Calibrating state / placing consequences / preparing choices</div>
+    </div>
+    """
 
 
 def game_html(
@@ -449,10 +503,11 @@ def game_html(
     report: dict[str, Any] | None = None,
 ) -> str:
     state = environment_state(session.world_state)
+    expression = character_expression(session.world_state)
     background = image_data_uri(environment_image(session))
     sprite = image_data_uri(str(ROOT / "assets" / "characters" / "character.png"))
     portrait = image_data_uri(str(PERSONA_ASSETS[session.persona]))
-    sprite_position = {"thriving": "100%", "stable": "33.333%", "struggling": "66.666%"}[state]
+    sprite_position = {"neutral": "0%", "stressed": "33.333%", "confident": "66.666%"}[expression]
     node = node or {
         "month_label": "Future report",
         "node_theme": "reflection",
@@ -501,7 +556,7 @@ def game_html(
       <div class="stage-bottom">
         {persona_markup}
         <div class="player-wrap">
-          <span class="state-pill">World: {state}</span>
+          <span class="state-pill">World: {state} / You: {expression}</span>
           <div class="player-sprite" style="background-image:url('{sprite}');background-position:{sprite_position} 0"></div>
         </div>
       </div>
@@ -654,8 +709,9 @@ with gr.Blocks(css=CSS, theme=theme, title="LifeChoice Simulator") as demo:
     begin_btn.click(
         begin,
         [dilemma, path_choice, calibration, persona],
-        [session_state, game_board, choices, custom, report_group, play_column, setup_group, choose_btn],
-    ).then(lambda: gr.Group(visible=True), outputs=game_group, show_progress="hidden")
+        [session_state, game_board, choices, custom, report_group, play_column, setup_group, game_group, choose_btn],
+        show_progress="hidden",
+    )
     choose_btn.click(
         make_choice,
         [session_state, choices, custom],
@@ -663,9 +719,9 @@ with gr.Blocks(css=CSS, theme=theme, title="LifeChoice Simulator") as demo:
     )
     reset_btn.click(
         reset,
-        outputs=[session_state, game_board, choices, custom, report_group, play_column, setup_group, choose_btn],
+        outputs=[session_state, game_board, choices, custom, report_group, play_column, setup_group, game_group, choose_btn],
         show_progress="hidden",
-    ).then(lambda: gr.Group(visible=False), outputs=game_group, show_progress="hidden")
+    )
 
 if __name__ == "__main__":
     demo.queue(default_concurrency_limit=8).launch()
